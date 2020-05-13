@@ -34,7 +34,7 @@
               <el-menu-item index="1-3">选项3</el-menu-item>
           </el-submenu>
 
-          <el-menu-item index="3">消息中心</el-menu-item>
+          <el-menu-item index="3" @click="alert('111')">首页</el-menu-item>
           <el-menu-item index="4">
             <a href="https://www.ele.me" target="_blank">订单管理</a>
           </el-menu-item>
@@ -50,13 +50,13 @@
 
       <!-- 主体左边 -->
       <el-aside width="200px">
-        <el-menu  :default-active="this.$route.params.id" background-color="#fff" active-text-color="#35A7FF" text-color="#444444"  @open="handleOpen" unique-opened>
+        <el-menu  :default-active="this.$route.params.id" background-color="#fff" active-text-color="#35A7FF" text-color="#444444"  @open="handleOpen" unique-opened @select="handleSelect">
           <el-submenu :index="''+item.id" v-for="item in allFileContent" :key="item.id" >
             <template slot="title">
               <i class="el-icon-folder-opened"></i>
               <span>{{item.fileName}}</span>
             </template>
-            <el-menu-item :index="item2.id+''" v-for="item2 in twoFileContent" :key="item2.id">{{item2.fileName}}</el-menu-item>
+            <el-menu-item :index="item2.id+':'+item.id" v-for="item2 in twoFileContent" :key="item2.id" >{{item2.fileName}}</el-menu-item>
           </el-submenu>
         </el-menu>
       </el-aside>
@@ -64,19 +64,19 @@
       <!-- 主体右边 -->
       <el-main style="background:#E9EEF3">
         <el-card class="home_left_title" v-if="show">
-          <!-- 添加二级科目的按钮 -->
+          <!-- 添加二级文件的按钮 -->
           <section class="home_left_title_button">
-              <el-button type="primary" round icon="el-icon-circle-plus-outline" size="small " @click="addFileTwo">添加二级文件</el-button>
+              <el-button type="primary" round icon="el-icon-circle-plus-outline" size="small " @click="add2 = true">添加二级文件</el-button>
           </section>
 
           <!-- 一级文件名称 -->
           <section class="home_left_title_title">
-              <i class="iconfont icon-biaotirenzhengrukou"></i>
-              <span>{{this.oneFileMessage.fileName}}</span>
+              <i class="el-icon-document-checked"></i>
+              <strong>{{this.oneFileMessage.fileName}}</strong>
           </section>
         </el-card>
 
-        <router-view></router-view>
+        <router-view ref="view"></router-view>
       </el-main>
     </el-container>
 
@@ -91,7 +91,7 @@
         </el-form-item>
       </el-form>
       <span slot="footer" class="dialog-footer">
-        <el-button @click="add = false">取 消</el-button>
+        <el-button @click="cancel">取 消</el-button>
         <el-button type="primary" @click="addFileOne">确 定</el-button>
       </span>
     </el-dialog>
@@ -105,8 +105,8 @@
         </el-form-item>
       </el-form>
       <span slot="footer" class="dialog-footer">
-        <el-button @click="add = false">取 消</el-button>
-        <el-button type="primary" @click="add = false">确 定</el-button>
+        <el-button @click="cancel">取 消</el-button>
+        <el-button type="primary" @click="addFileTwo">确 定</el-button>
       </span>
     </el-dialog>
   </el-container>
@@ -145,10 +145,11 @@ export default {
 
       res.status !== 200 && this.$message.error('获取文件列表数据失败！')
 
-      this.$message.success('欢迎来到星燎空间！')
-
       this.allFileContent = res.data
-      console.log(this.allFileContent)
+
+      //存储一份全局数据用于oneshow页面判断是否是新的用户
+      window.localStorage.setItem('allFileContent',res.data)
+
     },
     //监听退出按钮
     secede() {
@@ -174,19 +175,39 @@ export default {
 
           let {data:res} = await this.$http.post('/fileOne',{params:{userId:userId,fileName:this.fileForm.fileName}})
          
-          if(res.status !== 200) return
+          if(res.status !== 200) return this.$message.error('添加一级文件失败！')
 
           // //提示添加成功
           this.$message.success('添加成功！')
           this.fileForm.fileName = ''
           this.add=false
+
+          //刷新页面
+          this.getAllFile()
       })
     },
 
-    //监听添加
-    addFileTwo(slot)
+    //监听添加二级文件
+    addFileTwo()
     {
-      this.add2=true
+      
+      //判断表单内容是否空
+       this.$refs.fileTwo.validate(async callback => {
+          if(!callback) return this.$message.error('请输入内容，不能空白！')
+
+          let userId = this.$store.state.userId || window.localStorage.getItem('userid')
+
+          let {data:res} = await this.$http.post('/fileTwo',{params:{userid:userId,fileOneId:this.oneFileMessage.id,content:'',fileName:this.fileForm.fileName}})
+
+          res.status !== 200 && this.$message.error('添加二级文件错误！')
+          // //提示添加成功
+          this.$message.success('添加成功！')
+          this.fileForm.fileName = ''
+          this.add2=false
+
+          this.handleOpen(this.oneFileMessage.id)
+      })
+      
     },
     //监听右边列表点击事件
     async handleOpen(key) {
@@ -202,26 +223,45 @@ export default {
 
         //通过路由控制show页面的card隐藏
         let path=this.$route.path
-        path !== '/Show' ? this.show =false : this.show =true
+        path !== '/Show' ? this.show =false : this.show = true
         
 
         //根据点击的key在一级信息遍历出，对应数据
         this.oneFileMessage = this.allFileContent.find(item=>item.id == key)
 
         //跳转页面show.vue
-        this.$router.push({path:'/Show'})
-        console.log(`id=${key}`)
-        console.log(this.oneFileMessage)
-        console.log(res)
-        console.log(this.$route.path)
-      },
+        this.$router.push({path:'/Show',query:{oneFileId:this.oneFileMessage.id}})
 
-      rou(){
-        alert('111')
-      }
+        this.$refs['view'].setOneFileId()
+        console.log(this.oneFileMessage.id)
+       
+    },
+
+    //监听左边菜单子项点击事件
+    handleSelect(key, keyPath) {
+      //1.获取一，二，级文件id
+      let id = keyPath[1]
+
+      //2.ID进行切割数组存储
+      let allID = id.split(":");
+
+      let twoFileContent = this.twoFileContent.find(item=>item.id == allID[0])
+
+      this.$router.push({path:"/card",query:{fileTwoId:allID[0],fileOneId:allID[1],twoFileContent:twoFileContent}})
+      this.$refs['view'].setData()
+      console.log(this.twoFileContent)
+    },
+
+    //监听添加文件取消事件
+    cancel(){
+      this.add = false;
+      this.fileForm.fileName = null
+    }
   },
   created() {
     this.getAllFile()
+    this.handleOpen(this.$route.query.oneFileId)
+    
   }
 };
 </script>
@@ -273,12 +313,14 @@ export default {
     }
     .home_left_title_title{
       display: inline-block;
+      font-weight: 300;
       font-size: 20px;
       i{
         color: #1ec0ff;
       }
-      span{
+      strong{
         color: #000;
+        margin-left: 9px;
       }
     }
   }
