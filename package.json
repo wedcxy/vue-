@@ -9,7 +9,7 @@
   "dependencies": {
     "@xunlei/vue-context-menu": "^1.0.2",
     "animate.css": "^3.7.2",
-    "axios": "^0.19.2",
+    "axios": "^0.21.1",
     "element-ui": "^2.13.0",
     "vue": "^2.6.10",
     "vue-quill-editor": "^3.0.6",
